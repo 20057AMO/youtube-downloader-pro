@@ -22,7 +22,6 @@
 - **Real-time Progress** / تتبع لحظي - Live progress via Server-Sent Events (SSE)
 - **Bilingual UI** / واجهة ثنائية اللغة - Full Arabic & English support with RTL/LTR
 - **Premium UI** / واجهة احترافية - Web Builders dark theme with glassmorphism
-- **Responsive** / متجاوب - Works on desktop and mobile
 - **Cross-platform** / متعدد المنصات - Windows, macOS, Linux
 
 ---
@@ -60,7 +59,7 @@ python install_ffmpeg.py
 python app.py
 ```
 
-Open http://localhost:5000 in your browser.
+Open (http://localhost:5000) in your browser.
 
 ---
 
