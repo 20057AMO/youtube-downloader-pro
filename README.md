@@ -108,14 +108,9 @@ youtube-downloader-pro/
 
 | الاسم | الدور |
 |-------|-------|
-| Mahmoud Hamada | Software Engineer |
-| Mahmoud M. Abdullah | Creative Director |
 | Ahmed M. Ali | Leader (Development) |
 
 </div>
 
 ---
 
-## License
-
-MIT License - See [LICENSE](LICENSE) for details.
