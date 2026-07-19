@@ -107,15 +107,5 @@ youtube-downloader-pro/
 
 **[Web Builders](https://20057amo.github.io/webbuilders/)** - Building Ideas with Different Style.
 
-<div dir="rtl">
 
-### فريق Web Builders
-
-| الاسم | الدور |
-|-------|-------|
-| Ahmed M. Ali | Leader (Development) |
-
-</div>
-
----
 
