@@ -72,7 +72,6 @@ youtube-downloader-pro/
 ├── install_ffmpeg.py      # FFmpeg installer utility
 ├── requirements.txt       # Python dependencies
 ├── .gitignore             # Git ignore rules
-├── LICENSE                # MIT License
 ├── README.md              # This file
 ├── static/
 │   ├── index.html         # Frontend HTML (Bilingual)
