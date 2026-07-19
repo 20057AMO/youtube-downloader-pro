@@ -9,6 +9,7 @@ let currentInfo = null;
 let currentMode = 'video';
 let activeTaskId = null;
 let sseSource = null;
+let currentFolder = '';
 
 // ─────────────────────
 //  Preloader
@@ -352,33 +353,72 @@ function renderProgressItems(items) {
 // ─────────────────────
 //  History
 // ─────────────────────
-async function loadHistory() {
+async function loadHistory(folder = '') {
+  currentFolder = folder;
   const list = document.getElementById('historyList');
   list.innerHTML = '<div style="text-align:center;padding:40px;"><div class="spinner-css" style="margin:0 auto;"></div></div>';
 
   try {
-    const res = await fetch(`${API}/api/downloads`);
+    const url = folder
+      ? `${API}/api/downloads?folder=${encodeURIComponent(folder)}`
+      : `${API}/api/downloads`;
+    const res = await fetch(url);
     const data = await res.json();
 
+    // Build header with breadcrumb
+    let headerHtml = '';
+    if (folder) {
+      headerHtml = `
+        <div class="history-breadcrumb">
+          <button class="breadcrumb-back" onclick="loadHistory('')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            ${t('historyTitle')}
+          </button>
+          <span class="breadcrumb-separator">/</span>
+          <span class="breadcrumb-current">${escHtml(folder)}</span>
+        </div>
+      `;
+    }
+
     if (!data.files || data.files.length === 0) {
-      list.innerHTML = `<div class="empty-state"><div class="empty-icon">&#128194;</div><p>${t('historyEmpty')}</p></div>`;
+      list.innerHTML = headerHtml + `<div class="empty-state"><div class="empty-icon">&#128194;</div><p>${t('historyEmpty')}</p></div>`;
       return;
     }
 
-    list.innerHTML = data.files.map(f => {
+    list.innerHTML = headerHtml + data.files.map(f => {
       const isFolder = f.type === 'folder';
       const icon = isFolder ? '\uD83D\uDCC1' : getFileIcon(f.name);
       const sizeStr = isFolder ? `${f.count} ${t('historyItems')}` : formatBytes(f.size);
 
-      return `
-        <div class="history-card-item">
-          <div class="hist-icon-box">${icon}</div>
-          <div class="hist-details">
-            <div class="hist-title">${escHtml(f.name)}</div>
-            <div class="hist-meta">${sizeStr}</div>
+      if (isFolder) {
+        return `
+          <div class="history-card-item" onclick="loadHistory('${escAttr(f.name)}')" style="cursor:pointer;">
+            <div class="hist-icon-box">${icon}</div>
+            <div class="hist-details">
+              <div class="hist-title">${escHtml(f.name)}</div>
+              <div class="hist-meta">${sizeStr}</div>
+            </div>
+            <svg class="hist-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
           </div>
-        </div>
-      `;
+        `;
+      } else {
+        const downloadUrl = folder
+          ? `${API}/api/download-file?name=${encodeURIComponent(f.name)}&folder=${encodeURIComponent(folder)}`
+          : `${API}/api/download-file?name=${encodeURIComponent(f.name)}`;
+
+        return `
+          <div class="history-card-item">
+            <div class="hist-icon-box">${icon}</div>
+            <div class="hist-details">
+              <div class="hist-title">${escHtml(f.name)}</div>
+              <div class="hist-meta">${sizeStr}</div>
+            </div>
+            <a href="${downloadUrl}" class="hist-download-btn" title="${t('downloadFile')}" download>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            </a>
+          </div>
+        `;
+      }
     }).join('');
 
   } catch (err) {
@@ -393,10 +433,13 @@ async function openFolder() {
   try {
     const res = await fetch(`${API}/api/open-folder`, { method: 'POST' });
     const data = await res.json();
-    if (data.success) {
+
+    if (data.opened) {
       toast(t('toastFolderOpen'), 'success');
     } else {
-      toast(t('toastFolderError'), 'error');
+      // Folder couldn't be opened (e.g. mobile/remote access), redirect to history
+      toast(t('toastFolderRedirect'), 'success');
+      showSection('history');
     }
   } catch (err) {
     toast(t('toastServer_error'), 'error');
@@ -406,6 +449,7 @@ async function openFolder() {
 function resetUI() {
   document.getElementById('progressCard').style.display = 'none';
   document.getElementById('infoCard').style.display = 'none';
+  document.getElementById('progressBadge').style.color = '';
   urlInput.value = '';
   clearBtn.style.display = 'none';
   currentInfo = null;
@@ -440,6 +484,11 @@ function toast(msg, type = '') {
 function escHtml(str) {
   if (!str) return '';
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function escAttr(str) {
+  if (!str) return '';
+  return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
 }
 
 function fmtDuration(secs) {

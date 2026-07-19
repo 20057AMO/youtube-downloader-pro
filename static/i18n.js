@@ -62,6 +62,7 @@ const translations = {
     toastDownloadStart: 'بدأ التحميل بنجاح',
     toastFolderOpen: 'تم فتح المجلد بنجاح',
     toastFolderError: 'لا يمكن فتح المجلد على هذا النظام',
+    toastFolderRedirect: 'انتقلنا لصفحة المكتبة لتتمكن من تحميل ملفاتك',
     toastServer_error: 'تعذر الاتصال بالخادم',
 
     // Errors
@@ -78,6 +79,7 @@ const translations = {
     extraItems: 'و {0} مقطع إضافي',
     errorCount: 'تنبيهات ({0}):',
     errorDetails: 'تفاصيل الخطأ:',
+    downloadFile: 'تحميل الملف',
   },
 
   en: {
@@ -139,6 +141,7 @@ const translations = {
     toastDownloadStart: 'Download started successfully',
     toastFolderOpen: 'Folder opened successfully',
     toastFolderError: 'Cannot open folder on this system',
+    toastFolderRedirect: 'Redirected to Library so you can download your files',
     toastServer_error: 'Could not connect to server',
 
     // Errors
@@ -155,6 +158,7 @@ const translations = {
     extraItems: 'and {0} more items',
     errorCount: 'Warnings ({0}):',
     errorDetails: 'Error Details:',
+    downloadFile: 'Download File',
   }
 };
 

@@ -2,7 +2,7 @@
 YouTube Downloader - Flask Backend Server
 """
 
-from flask import Flask, jsonify, request, send_from_directory, Response
+from flask import Flask, jsonify, request, send_from_directory, send_file, Response
 from flask_cors import CORS
 import os
 import json
@@ -136,42 +136,106 @@ def api_stream(task_id):
 
 @app.route('/api/downloads', methods=['GET'])
 def api_downloads():
+    subfolder = request.args.get('folder', '')
+    target_dir = DOWNLOADS_DIR
+    if subfolder:
+        target_dir = DOWNLOADS_DIR / subfolder
+        # Prevent path traversal
+        try:
+            target_dir.resolve().relative_to(DOWNLOADS_DIR.resolve())
+        except ValueError:
+            return jsonify({'error': 'مسار غير صالح'}), 400
+
     files = []
-    if DOWNLOADS_DIR.exists():
-        for item in DOWNLOADS_DIR.iterdir():
+    if target_dir.exists():
+        for item in target_dir.iterdir():
             if item.name.startswith('.'):
                 continue
             if item.is_file():
+                stat = item.stat()
                 files.append({
                     'name': item.name,
-                    'size': item.stat().st_size,
-                    'type': 'file'
+                    'size': stat.st_size,
+                    'type': 'file',
+                    'modified': stat.st_mtime
                 })
             elif item.is_dir():
-                count = len(list(item.iterdir()))
+                count = len([f for f in item.iterdir() if not f.name.startswith('.')])
                 files.append({
                     'name': item.name,
                     'count': count,
                     'type': 'folder'
                 })
 
-    return jsonify({'files': sorted(files, key=lambda x: x['name'])})
+    files.sort(key=lambda x: x.get('modified', 0), reverse=True)
+    return jsonify({'files': files, 'folder': subfolder})
+
+
+@app.route('/api/download-file')
+def api_download_file():
+    """Serve a file from the downloads directory to the browser."""
+    filename = request.args.get('name', '')
+    folder = request.args.get('folder', '')
+
+    if not filename:
+        return jsonify({'error': 'اسم الملف مطلوب'}), 400
+
+    if folder:
+        target_dir = DOWNLOADS_DIR / folder
+    else:
+        target_dir = DOWNLOADS_DIR
+
+    file_path = target_dir / filename
+
+    # Prevent path traversal
+    try:
+        file_path.resolve().relative_to(DOWNLOADS_DIR.resolve())
+    except ValueError:
+        return jsonify({'error': 'مسار غير صالح'}), 400
+
+    if not file_path.exists() or not file_path.is_file():
+        return jsonify({'error': 'الملف غير موجود'}), 404
+
+    return send_file(
+        file_path,
+        as_attachment=True,
+        download_name=filename
+    )
 
 
 @app.route('/api/open-folder', methods=['POST'])
 def api_open_folder():
     try:
-        system = platform.system()
-        if system == "Windows":
-            subprocess.Popen(f'explorer "{DOWNLOADS_DIR}"')
-        elif system == "Darwin":
-            subprocess.Popen(['open', str(DOWNLOADS_DIR)])
-        else:
-            subprocess.Popen(['xdg-open', str(DOWNLOADS_DIR)])
+        if not DOWNLOADS_DIR.exists():
+            DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
-        return jsonify({'success': True})
+        system = platform.system()
+        opened = False
+        if system == "Windows":
+            subprocess.Popen(f'explorer "{DOWNLOADS_DIR}"', shell=True)
+            opened = True
+        elif system == "Darwin":
+            subprocess.Popen(['open', str(DOWNLOADS_DIR)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            opened = True
+        else:
+            # Check if running in a graphical environment
+            display = os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY')
+            if display:
+                subprocess.Popen(['xdg-open', str(DOWNLOADS_DIR)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                opened = True
+
+        return jsonify({
+            'success': True,
+            'opened': opened,
+            'path': str(DOWNLOADS_DIR)
+        })
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({
+            'success': False,
+            'opened': False,
+            'path': str(DOWNLOADS_DIR),
+            'error': str(e)
+        })
 
 
 if __name__ == '__main__':
