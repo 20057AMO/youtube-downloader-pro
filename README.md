@@ -39,7 +39,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/youtube-downloader-pro.git
+git clone https://github.com/20057AMO/youtube-downloader-pro.git
 cd youtube-downloader-pro
 # Install Requirements
 pip install -r requirements.txt
