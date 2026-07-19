@@ -34,14 +34,19 @@
 
 - Python 3.10+
 - ffmpeg (installed automatically via `install_ffmpeg.py`)
-
+- flask 3.1.3
+- flask-cors 6.0.5
+- yt-dlp 2025.1.1
+- gunicorn 21.2.0
 ### Installation / التثبيت
 
 ```bash
 # Clone the repository
 git clone https://github.com/yourusername/youtube-downloader-pro.git
 cd youtube-downloader-pro
-
+# Install Requirements
+pip install -r requirements.txt
+ 
 # Create virtual environment
 python3 -m venv venv
 source venv/bin/activate  # Linux/macOS
