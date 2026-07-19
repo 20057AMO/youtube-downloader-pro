@@ -11,7 +11,6 @@
 ![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python)
 ![Flask](https://img.shields.io/badge/Flask-3.x-green?logo=flask)
 ![yt-dlp](https://img.shields.io/badge/yt--dlp-latest-red)
-![License](https://img.shields.io/badge/License-MIT-yellow)
 
 ---
 
@@ -37,7 +36,6 @@
 - flask 3.1.3
 - flask-cors 6.0.5
 - yt-dlp 2025.1.1
-- gunicorn 21.2.0
 ### Installation / التثبيت
 
 ```bash
