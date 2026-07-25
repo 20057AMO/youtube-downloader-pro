@@ -8,6 +8,9 @@ ENV FLASK_ENV=production
 
 WORKDIR /app
 
+# Create a non-root user and group
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ffmpeg \
@@ -19,8 +22,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN mkdir -p downloads
+# Create downloads folder and change ownership to the non-root user
+RUN mkdir -p downloads && chown -R appuser:appuser /app
+
+# Switch to the non-root user
+USER appuser
 
 EXPOSE 5000
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "3", "--threads", "3", "app:app"]
+# Fix: bind to 0.0.0.0 and use 1 worker with multiple threads to share memory state for progress tracking
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--threads", "8", "app:app"]
