@@ -99,9 +99,3 @@ youtube-downloader-pro/
 
 ---
 
-## Built by / بناها
-
-**[Web Builders](https://20057amo.github.io/webbuilders/)** - Building Ideas with Different Style.
-
-
-
