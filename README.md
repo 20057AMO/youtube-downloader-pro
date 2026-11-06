@@ -284,4 +284,4 @@ python -m unittest discover -s tests -v
 
 ## Credits
 
-Built by [Ahmed M.Ali]. Powered by [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [FFmpeg](https://ffmpeg.org/).
+Built by Ahmed M.Ali . Powered by [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [FFmpeg](https://ffmpeg.org/).
