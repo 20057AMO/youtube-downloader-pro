@@ -1,4 +1,8 @@
-# YouTube Downloader Pro
+<p align="left">
+  <img src="static/wb-logo.svg" alt="logo" width="110" />
+  # YouTube Downloader Pro
+</p>
+
 
 <div dir="rtl">
 
