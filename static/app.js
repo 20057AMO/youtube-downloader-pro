@@ -5,11 +5,28 @@
 
 const API = '';
 
+const DEFAULT_QUALITIES = ['2160', '1440', '1080', '720', '480', '360'];
+const QUALITY_LABELS = {
+  '2160': '4K (2160p)',
+  '1440': '2K (1440p)',
+  '1080': 'Full HD (1080p)',
+  '720': 'HD (720p)',
+  '480': 'SD (480p)',
+  '360': '360p'
+};
+const POLL_INTERVAL_MS = 1000;
+const POLL_MAX_ATTEMPTS = 60;
+
 let currentInfo = null;
+let currentUrl = '';
 let currentMode = 'video';
 let activeTaskId = null;
 let sseSource = null;
+let streamingTaskId = null;
+let pollTimer = null;
+let pollTaskId = null;
 let currentFolder = '';
+let isStarting = false;
 
 // ─────────────────────
 //  Preloader
@@ -24,6 +41,7 @@ window.addEventListener('load', () => {
   }
 
   setLanguage(getCurrentLang());
+  checkSystemHealth();
 });
 
 // ─────────────────────
@@ -60,6 +78,8 @@ function clearInput() {
   urlInput.value = '';
   clearBtn.style.display = 'none';
   hideInfoCard();
+  currentInfo = null;
+  currentUrl = '';
   urlInput.focus();
 }
 
@@ -88,16 +108,29 @@ async function fetchInfo() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url })
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
 
+    if (res.status === 429) throw new Error(t('toastRateLimited'));
     if (!res.ok || data.error) throw new Error(data.error || t('toastLinkError'));
+    if (!data.info) throw new Error(t('toastLinkError'));
 
     currentInfo = data.info;
+    currentUrl = url;
+
+    if (currentInfo.type === 'playlist') {
+      populateQualities(DEFAULT_QUALITIES);
+    } else {
+      populateQualities(Array.isArray(currentInfo.available_qualities)
+        ? currentInfo.available_qualities
+        : DEFAULT_QUALITIES);
+    }
+
     renderInfoCard(currentInfo);
     toast(t('toastLinkSuccess'), 'success');
 
   } catch (err) {
-    toast(err.message, 'error');
+    const message = err instanceof TypeError ? t('toastNetworkError') : (err.message || t('toastNetworkError'));
+    toast(message, 'error');
   } finally {
     btn.disabled = false;
     btn.innerHTML = `<span data-i18n="fetchBtn">${t('fetchBtn')}</span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>`;
@@ -115,10 +148,13 @@ function renderInfoCard(info) {
   const playSvg = `<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>`;
 
   if (info.type === 'playlist') {
+    const items = Array.isArray(info.items) ? info.items : [];
+    const count = info.count != null ? Number(info.count) || items.length : items.length;
+
     content.innerHTML = `
       <div class="video-detail-grid">
         <div class="thumb-container">
-          ${info.thumbnail ? `<img src="${info.thumbnail}" alt="thumb" onerror="this.style.display='none'"/>` : ''}
+          ${info.thumbnail ? `<img src="${escAttr(info.thumbnail)}" alt="thumb" onerror="this.style.display='none'"/>` : ''}
         </div>
         <div class="video-meta-info">
           <div class="video-title">${escHtml(info.title)}</div>
@@ -128,19 +164,19 @@ function renderInfoCard(info) {
           </div>
           <div class="badges-row">
             <span class="modern-badge primary">${t('badgePlaylist')}</span>
-            <span class="modern-badge success">${info.count} ${t('badgeCount')}</span>
+            <span class="modern-badge success">${count} ${t('badgeCount')}</span>
           </div>
         </div>
       </div>
       <div class="playlist-preview-box">
-        ${info.items.slice(0, 50).map((v, i) => `
+        ${items.slice(0, 50).map((v, i) => `
           <div class="pl-row">
             <span class="pl-idx">${String(i + 1).padStart(2, '0')}</span>
             <span class="pl-name">${escHtml(v.title)}</span>
-            ${v.duration ? `<span class="pl-dur">${fmtDuration(v.duration)}</span>` : ''}
+            ${Number(v.duration) > 0 ? `<span class="pl-dur">${fmtDuration(Number(v.duration))}</span>` : ''}
           </div>
         `).join('')}
-        ${info.count > 50 ? `<div class="pl-row" style="justify-content:center;color:var(--secondary-text)">${t('extraItems', info.count - 50)}</div>` : ''}
+        ${count > 50 ? `<div class="pl-row" style="justify-content:center;color:var(--secondary-text)">${t('extraItems', count - 50)}</div>` : ''}
       </div>
     `;
 
@@ -152,13 +188,13 @@ function renderInfoCard(info) {
     `;
 
   } else {
-    const views = info.view_count ? formatNumber(info.view_count) + ' ' + t('badgeViews') : '';
-    const duration = info.duration ? fmtDuration(info.duration) : '';
+    const views = Number(info.view_count) > 0 ? formatNumber(Number(info.view_count)) + ' ' + t('badgeViews') : '';
+    const duration = Number(info.duration) > 0 ? fmtDuration(Number(info.duration)) : '';
 
     content.innerHTML = `
       <div class="video-detail-grid">
         <div class="thumb-container">
-          ${info.thumbnail ? `<img src="${info.thumbnail}" alt="thumb" onerror="this.style.display='none'"/>
+          ${info.thumbnail ? `<img src="${escAttr(info.thumbnail)}" alt="thumb" onerror="this.style.display='none'"/>
             <div class="play-icon-overlay">${playSvg}</div>` : ''}
         </div>
         <div class="video-meta-info">
@@ -195,7 +231,16 @@ function hideInfoCard() {
 //  Start Download
 // ─────────────────────
 async function startDownload(type) {
-  const url = urlInput.value.trim();
+  if (isStarting) return;
+  isStarting = true;
+
+  const startBtn = document.querySelector('#downloadActions .btn-download-main');
+  if (startBtn) {
+    startBtn.disabled = true;
+    startBtn.setAttribute('aria-busy', 'true');
+  }
+
+  const url = (currentUrl || urlInput.value).trim();
   const quality = document.getElementById('qualitySelect').value;
   const audioOnly = currentMode === 'audio';
 
@@ -205,8 +250,13 @@ async function startDownload(type) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url, type, quality, audio_only: audioOnly })
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
 
+    if (res.status === 429) {
+      showSystemNotice(data.error || t('toastTooManyTasks'), 'error');
+      toast(t('toastTooManyTasks'), 'error');
+      return;
+    }
     if (!res.ok || data.error) throw new Error(data.error || t('toastLinkError'));
 
     activeTaskId = data.task_id;
@@ -215,7 +265,14 @@ async function startDownload(type) {
     toast(t('toastDownloadStart'), 'success');
 
   } catch (err) {
-    toast(err.message, 'error');
+    const message = err instanceof TypeError ? t('toastNetworkError') : (err.message || t('toastNetworkError'));
+    toast(message, 'error');
+  } finally {
+    isStarting = false;
+    if (startBtn) {
+      startBtn.disabled = false;
+      startBtn.removeAttribute('aria-busy');
+    }
   }
 }
 
@@ -224,14 +281,19 @@ async function startDownload(type) {
 // ─────────────────────
 function showProgressCard(type) {
   const card = document.getElementById('progressCard');
+  const badge = document.getElementById('progressBadge');
+  const bar = document.getElementById('progressBar');
+  const errorList = document.getElementById('errorList');
 
   document.getElementById('progressTitle').textContent = type === 'playlist' ? t('progressPlaylistTitle') : t('progressSingleTitle');
-  document.getElementById('progressBadge').textContent = '0%';
-  document.getElementById('progressBar').style.width = '0%';
-  document.getElementById('progressBar').style.background = 'var(--accent-color)';
+  badge.textContent = '0%';
+  badge.style.color = '';
+  bar.style.width = '0%';
+  bar.style.background = 'var(--accent-color)';
   document.getElementById('progressMessage').textContent = t('preparing');
   document.getElementById('playlistItems').innerHTML = '';
-  document.getElementById('errorList').style.display = 'none';
+  errorList.innerHTML = '';
+  errorList.style.display = 'none';
   document.getElementById('successActions').style.display = 'none';
 
   card.style.display = 'block';
@@ -242,43 +304,98 @@ function showProgressCard(type) {
 //  SSE Streaming
 // ─────────────────────
 function startStreaming(taskId) {
-  if (sseSource) { sseSource.close(); sseSource = null; }
+  if (sseSource && streamingTaskId === taskId) return;
 
-  sseSource = new EventSource(`${API}/api/stream/${taskId}`);
+  stopStreaming();
+  stopPolling();
+  streamingTaskId = taskId;
 
-  sseSource.onmessage = (e) => {
+  let isFinished = false;
+  const source = new EventSource(`${API}/api/stream/${taskId}`);
+  sseSource = source;
+
+  source.onmessage = (e) => {
     try {
       const data = JSON.parse(e.data);
       updateProgress(data);
 
       if (data.status === 'completed' || data.status === 'error') {
-        sseSource.close();
-        sseSource = null;
+        isFinished = true;
+        stopStreaming();
       }
-    } catch(err) { /* ignore */ }
+    } catch (err) {
+      // A malformed frame should not kill the stream; the next frame carries full state.
+    }
   };
 
-  sseSource.onerror = () => {
-    sseSource.close();
-    sseSource = null;
+  source.onerror = () => {
+    if (isFinished) return;
+    isFinished = true;
+    stopStreaming();
     pollProgress(taskId);
   };
 }
 
-async function pollProgress(taskId) {
-  while (true) {
+function stopStreaming() {
+  if (sseSource) {
+    sseSource.close();
+    sseSource = null;
+  }
+  streamingTaskId = null;
+}
+
+function pollProgress(taskId) {
+  if (pollTaskId === taskId) return;
+
+  stopPolling();
+  pollTaskId = taskId;
+  let attempts = 0;
+
+  const tick = async () => {
+    if (pollTaskId !== taskId) return;
+    attempts += 1;
+
+    let isFinished = false;
     try {
       const res = await fetch(`${API}/api/progress/${taskId}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+      if (pollTaskId !== taskId) return;
+
       updateProgress(data);
-      if (data.status === 'completed' || data.status === 'error') break;
-    } catch {}
-    await new Promise(r => setTimeout(r, 1000));
+      isFinished = data.status === 'completed' || data.status === 'error';
+    } catch (err) {
+      // Transient network failure: retry until the attempt budget runs out.
+    }
+
+    if (pollTaskId !== taskId) return;
+    if (isFinished) {
+      stopPolling();
+      return;
+    }
+    if (attempts >= POLL_MAX_ATTEMPTS) {
+      stopPolling();
+      toast(t('toastNetworkError'), 'error');
+      return;
+    }
+
+    pollTimer = setTimeout(tick, POLL_INTERVAL_MS);
+  };
+
+  tick();
+}
+
+function stopPolling() {
+  if (pollTimer) {
+    clearTimeout(pollTimer);
+    pollTimer = null;
   }
+  pollTaskId = null;
 }
 
 function updateProgress(data) {
-  const pct = data.progress || 0;
+  const pct = Math.min(100, Math.max(0, Number(data.progress) || 0));
+  const taskType = data.type || (currentInfo && currentInfo.type) || 'video';
 
   document.getElementById('progressBar').style.width = pct + '%';
   document.getElementById('progressBadge').textContent = pct + '%';
@@ -287,8 +404,8 @@ function updateProgress(data) {
   const statusMap = {
     pending: t('progressPreparing'),
     fetching: t('progressFetching'),
-    downloading: data.type === 'playlist'
-      ? t('progressItemOf', data.current_item, data.total)
+    downloading: taskType === 'playlist'
+      ? t('progressItemOf', data.current_item || 0, data.total || 0)
       : t('progressDownloading'),
     completed: t('progressCompleted'),
     error: t('progressError')
@@ -306,9 +423,7 @@ function updateProgress(data) {
     document.getElementById('successActions').style.display = 'flex';
 
     if (data.errors && data.errors.length > 0) {
-      const errList = document.getElementById('errorList');
-      errList.innerHTML = `<strong>${t('errorCount', data.errors.length)}</strong><br>` + data.errors.slice(0, 5).join('<br>');
-      errList.style.display = 'block';
+      renderMessages('errorList', t('errorCount', data.errors.length), data.errors.slice(0, 5));
     }
   }
 
@@ -317,11 +432,19 @@ function updateProgress(data) {
     document.getElementById('progressBadge').style.color = 'var(--danger)';
     document.getElementById('successActions').style.display = 'flex';
     if (data.errors && data.errors.length > 0) {
-      const errList = document.getElementById('errorList');
-      errList.innerHTML = `<strong>${t('errorDetails')}</strong><br>` + data.errors.join('<br>');
-      errList.style.display = 'block';
+      renderMessages('errorList', t('errorDetails'), data.errors);
     }
   }
+}
+
+function renderMessages(containerId, heading, messages) {
+  const container = document.getElementById(containerId);
+  const safeMessages = (Array.isArray(messages) ? messages : [])
+    .map(message => escHtml(message))
+    .join('<br>');
+
+  container.innerHTML = `<strong>${escHtml(heading)}</strong><br>${safeMessages}`;
+  container.style.display = 'block';
 }
 
 function renderProgressItems(items) {
@@ -337,11 +460,13 @@ function renderProgressItems(items) {
       pending: '', downloading: 'active', completed: 'done', error: 'error'
     }[item.status] || '';
 
+    const itemPct = Math.min(100, Math.max(0, Number(item.progress) || 0));
+
     return `
       <div class="progress-item-box ${cls}">
         <span>${icon}</span>
         <span class="item-prog-title">${escHtml(item.title || `${i+1}`)}</span>
-        ${item.progress ? `<span class="item-prog-pct">${item.progress}%</span>` : ''}
+        ${itemPct > 0 ? `<span class="item-prog-pct">${itemPct}%</span>` : ''}
       </div>
     `;
   }).join('');
@@ -363,7 +488,9 @@ async function loadHistory(folder = '') {
       ? `${API}/api/downloads?folder=${encodeURIComponent(folder)}`
       : `${API}/api/downloads`;
     const res = await fetch(url);
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) throw new Error(data.error || t('toastServer_error'));
 
     // Build header with breadcrumb
     let headerHtml = '';
@@ -388,18 +515,18 @@ async function loadHistory(folder = '') {
     list.innerHTML = headerHtml + data.files.map(f => {
       const isFolder = f.type === 'folder';
       const icon = isFolder ? '\uD83D\uDCC1' : getFileIcon(f.name);
-      const sizeStr = isFolder ? `${f.count} ${t('historyItems')}` : formatBytes(f.size);
+      const sizeStr = isFolder ? `${Number(f.count) || 0} ${t('historyItems')}` : formatBytes(Number(f.size) || 0);
 
       if (isFolder) {
         return `
-          <div class="history-card-item" onclick="loadHistory('${escAttr(f.name)}')" style="cursor:pointer;">
-            <div class="hist-icon-box">${icon}</div>
-            <div class="hist-details">
-              <div class="hist-title">${escHtml(f.name)}</div>
-              <div class="hist-meta">${sizeStr}</div>
-            </div>
+          <button type="button" class="history-card-item" data-folder="${escAttr(f.name)}" onclick="loadHistory(this.dataset.folder)">
+            <span class="hist-icon-box">${icon}</span>
+            <span class="hist-details">
+              <span class="hist-title">${escHtml(f.name)}</span>
+              <span class="hist-meta">${sizeStr}</span>
+            </span>
             <svg class="hist-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
-          </div>
+          </button>
         `;
       } else {
         const downloadUrl = folder
@@ -422,7 +549,8 @@ async function loadHistory(folder = '') {
     }).join('');
 
   } catch (err) {
-    list.innerHTML = `<div class="empty-state"><div class="empty-icon">&#9888;</div><p>${err.message}</p></div>`;
+    const message = err instanceof TypeError ? t('toastNetworkError') : (err.message || t('toastNetworkError'));
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">&#9888;</div><p>${escHtml(message)}</p></div>`;
   }
 }
 
@@ -453,8 +581,10 @@ function resetUI() {
   urlInput.value = '';
   clearBtn.style.display = 'none';
   currentInfo = null;
+  currentUrl = '';
   activeTaskId = null;
-  if (sseSource) { sseSource.close(); sseSource = null; }
+  stopStreaming();
+  stopPolling();
   urlInput.focus();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -468,8 +598,14 @@ function toast(msg, type = '') {
   el.className = `toast-msg ${type}`;
 
   const icon = type === 'success' ? '\u2705' : type === 'error' ? '\u274C' : '\u2139\uFE0F';
-  el.innerHTML = `<span>${icon}</span> <span>${msg}</span>`;
+  const iconEl = document.createElement('span');
+  iconEl.setAttribute('aria-hidden', 'true');
+  iconEl.textContent = icon;
 
+  const messageEl = document.createElement('span');
+  messageEl.textContent = String(msg ?? '');
+
+  el.append(iconEl, messageEl);
   container.appendChild(el);
   setTimeout(() => {
     el.style.opacity = '0';
@@ -479,16 +615,104 @@ function toast(msg, type = '') {
 }
 
 // ─────────────────────
+//  System health / notices
+// ─────────────────────
+async function checkSystemHealth() {
+  try {
+    const res = await fetch(`${API}/api/health`);
+    if (!res.ok) return;
+
+    const data = await res.json();
+    if (data.ffmpeg === false) {
+      showSystemNotice(t('ffmpegMissing'), 'warning', 'ffmpegMissing');
+    }
+  } catch (err) {
+    // Health is advisory: if it cannot be read, stay quiet rather than blocking the UI.
+  }
+}
+
+function showSystemNotice(message, variant = 'warning', messageKey = '') {
+  const notice = document.getElementById('systemNotice');
+  if (!notice) return;
+
+  const text = document.createElement('span');
+  text.className = 'system-notice-text';
+  text.textContent = String(message);
+
+  const dismissBtn = document.createElement('button');
+  dismissBtn.type = 'button';
+  dismissBtn.className = 'system-notice-dismiss';
+  dismissBtn.setAttribute('aria-label', t('dismiss'));
+  dismissBtn.textContent = '\u00D7';
+  dismissBtn.addEventListener('click', hideSystemNotice);
+
+  notice.className = `system-notice ${variant}`;
+  notice.dataset.variant = variant;
+  notice.dataset.messageKey = messageKey;
+  notice.replaceChildren(text, dismissBtn);
+  notice.style.display = 'flex';
+}
+
+function hideSystemNotice() {
+  const notice = document.getElementById('systemNotice');
+  if (!notice) return;
+  notice.style.display = 'none';
+  notice.replaceChildren();
+}
+
+document.addEventListener('languageChanged', () => {
+  const notice = document.getElementById('systemNotice');
+  const messageKey = notice && notice.dataset.messageKey;
+  if (!messageKey || notice.style.display === 'none') return;
+  showSystemNotice(t(messageKey), notice.dataset.variant || 'warning', messageKey);
+});
+
+// ─────────────────────
 //  Helpers
 // ─────────────────────
+function populateQualities(list) {
+  const select = document.getElementById('qualitySelect');
+  const previous = select.value;
+
+  const values = Array.from(new Set(
+    (Array.isArray(list) ? list : [])
+      .filter(value => value !== null && value !== undefined && value !== '' && String(value) !== 'best')
+      .map(value => String(value))
+  )).sort((a, b) => Number(b) - Number(a));
+
+  const best = document.createElement('option');
+  best.value = 'best';
+  best.textContent = t('qualityBest');
+  best.setAttribute('data-i18n', 'qualityBest');
+
+  const options = [best, ...values.map(value => {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = QUALITY_LABELS[value] || `${value}p`;
+    return option;
+  })];
+
+  select.replaceChildren(...options);
+  select.value = options.some(option => option.value === previous) ? previous : 'best';
+  select.disabled = currentMode === 'audio';
+}
+
 function escHtml(str) {
-  if (!str) return '';
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function escAttr(str) {
-  if (!str) return '';
-  return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function fmtDuration(secs) {

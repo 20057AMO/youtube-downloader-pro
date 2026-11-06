@@ -31,7 +31,6 @@
       </div>
       <div class="logo-text">
         <span class="logo-main">YT-D Pro</span>
-        <span class="logo-sub">by Web Builders</span>
       </div>
     </div>
     <div class="header-right">
@@ -47,6 +46,8 @@
   <main class="main-container">
     <!-- Download Section -->
     <section class="section active" id="sectionDownload">
+      <div class="system-notice" id="systemNotice" role="status" style="display:none"></div>
+
       <!-- Hero -->
       <div class="hero">
         <div class="hero-badge" data-i18n="heroBadge">تجربة تحميل جديدة كلياً</div>
@@ -71,7 +72,7 @@
               autocomplete="off"
               dir="ltr"
             />
-            <button class="clear-btn" id="clearBtn" onclick="clearInput()">&#10005;</button>
+            <button class="clear-btn" id="clearBtn" onclick="clearInput()" aria-label="مسح الرابط" data-i18n-aria="clearInput">&#10005;</button>
           </div>
           <button class="btn-glow" id="fetchBtn" onclick="fetchInfo()">
             <span data-i18n="fetchBtn">استعلام</span>
@@ -165,13 +166,13 @@
   <footer class="site-footer">
     <div class="footer-brand">
       <img src="wb-logo.svg" alt="Web Builders" />
-      <span>Web Builders</span>
+      <span>YouTube Downloader Pro</span>
     </div>
-    <p>&copy; 2025 Web Builders. All rights reserved.</p>
+    <p>&copy; 2025 Ahmed M.Ali All rights reserved.</p>
   </footer>
 
   <!-- Toast Notifications -->
-  <div class="toast-wrapper" id="toastContainer"></div>
+  <div class="toast-wrapper" id="toastContainer" aria-live="polite" aria-atomic="false"></div>
 
   <script src="i18n.js"></script>
   <script src="app.js"></script>

@@ -256,6 +256,64 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* ── System Notice ── */
+.system-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 196, 0, 0.35);
+  border-radius: var(--radius-md);
+  background: rgba(255, 196, 0, 0.1);
+  color: #FFE082;
+  font-size: 14px;
+  line-height: 1.7;
+  text-align: start;
+}
+
+.system-notice.error {
+  border-color: rgba(255, 61, 0, 0.4);
+  background: var(--danger-bg);
+  color: #FFAB91;
+}
+
+.system-notice-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.system-notice-dismiss {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  color: inherit;
+  font-family: var(--font-main);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.85;
+  transition: var(--transition);
+}
+
+.system-notice-dismiss:hover {
+  background: rgba(255, 255, 255, 0.08);
+  opacity: 1;
+}
+
+.system-notice-dismiss:focus-visible,
+button.history-card-item:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+}
+
 /* ── Hero ── */
 .hero {
   text-align: center;
@@ -908,6 +966,15 @@ body {
   transition: var(--transition);
 }
 
+button.history-card-item {
+  width: 100%;
+  font-family: var(--font-main);
+  font-size: inherit;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
 .history-card-item:hover {
   background: rgba(255, 255, 255, 0.05);
   border-color: var(--border-hover);
@@ -927,6 +994,7 @@ body {
 .hist-details { flex: 1; overflow: hidden; }
 
 .hist-title {
+  display: block;
   font-size: 15px;
   font-weight: 600;
   color: var(--accent-color);
@@ -936,6 +1004,7 @@ body {
 }
 
 .hist-meta {
+  display: block;
   font-size: 13px;
   color: var(--secondary-text);
   margin-top: 4px;

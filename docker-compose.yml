@@ -1,24 +1,42 @@
-version: "3.8"
-
 services:
   web:
     build: .
     container_name: youtube-downloader
     restart: unless-stopped
+    init: true
     ports:
+      # Compose reads PORT from .env for host-side interpolation; the container
+      # always listens on 5000, matching the gunicorn command in the image.
       - "${PORT:-5000}:5000"
-    # To avoid permission issues on Linux, you can uncomment the next line and replace with your UID:GID
-    # user: "1000:1000"
     volumes:
+      # The image entrypoint chowns this mount to appuser on start, so a
+      # root-owned host ./downloads directory no longer causes EACCES.
       - ./downloads:/app/downloads
     environment:
       - FLASK_ENV=production
+      # The container always listens on 5000; ${PORT} above only maps the host port.
       - PORT=5000
+      # Forwarded from .env (see .env.example). Empty values keep features off.
+      - APP_USERNAME=${APP_USERNAME:-}
+      - APP_PASSWORD=${APP_PASSWORD:-}
+      - CORS_ORIGINS=${CORS_ORIGINS:-}
+      - RATE_LIMIT_PER_MINUTE=${RATE_LIMIT_PER_MINUTE:-60}
+      - TRUST_PROXY=${TRUST_PROXY:-0}
+      - MAX_ACTIVE_DOWNLOADS=${MAX_ACTIVE_DOWNLOADS:-3}
+      - MAX_QUEUED_TASKS=${MAX_QUEUED_TASKS:-20}
+      - MAX_PLAYLIST_ITEMS=${MAX_PLAYLIST_ITEMS:-500}
+      - COOKIES_FILE=${COOKIES_FILE:-}
+    # To use YouTube cookies, mount the file and set COOKIES_FILE=/app/cookies.txt:
+    # volumes:
+    #   - ./downloads:/app/downloads
+    #   - ./cookies.txt:/app/cookies.txt:ro
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:5000/api/health"]
       interval: 30s
       timeout: 10s
+      start_period: 10s
       retries: 3
 
-volumes:
-  downloads:
+# Optional: copy .env.example to .env to override PORT on the host. Compose
+# reads .env automatically for ${PORT} interpolation. To also pass the file
+# into the container, add `env_file: [.env]` to the web service.

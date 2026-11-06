@@ -64,6 +64,13 @@ const translations = {
     toastFolderError: 'لا يمكن فتح المجلد على هذا النظام',
     toastFolderRedirect: 'انتقلنا لصفحة المكتبة لتتمكن من تحميل ملفاتك',
     toastServer_error: 'تعذر الاتصال بالخادم',
+    toastTooManyTasks: 'الخادم مشغول: تم الوصول إلى الحد الأقصى للمهام. حاول مرة أخرى بعد قليل.',
+    toastRateLimited: 'طلبات كثيرة جداً. انتظر قليلاً ثم حاول مرة أخرى.',
+    toastNetworkError: 'تعذر الاتصال بالخادم. تحقق من الشبكة وحاول مرة أخرى.',
+
+    // System notices
+    ffmpegMissing: 'تنبيه: ffmpeg غير مثبّت على الخادم. معظم فيديوهات يوتيوب الحديثة تحتاج ffmpeg لدمج الصوت والفيديو، والتحويل إلى MP3 معطّل. ثبّت ffmpeg (python install_ffmpeg.py) لتفعيل كل الميزات.',
+    dismiss: 'إغلاق',
 
     // Errors
     errorInvalidData: 'الرجاء إدخال بيانات صحيحة',
@@ -80,6 +87,7 @@ const translations = {
     errorCount: 'تنبيهات ({0}):',
     errorDetails: 'تفاصيل الخطأ:',
     downloadFile: 'تحميل الملف',
+    clearInput: 'مسح الرابط',
   },
 
   en: {
@@ -143,6 +151,13 @@ const translations = {
     toastFolderError: 'Cannot open folder on this system',
     toastFolderRedirect: 'Redirected to Library so you can download your files',
     toastServer_error: 'Could not connect to server',
+    toastTooManyTasks: 'The server is busy: the task limit has been reached. Please try again shortly.',
+    toastRateLimited: 'Too many requests. Please wait a moment and try again.',
+    toastNetworkError: 'Could not connect to the server. Check your connection and try again.',
+
+    // System notices
+    ffmpegMissing: 'Heads up: ffmpeg is not installed on the server. Most modern YouTube videos need ffmpeg to merge audio and video, and MP3 conversion is disabled. Install ffmpeg (python install_ffmpeg.py) to enable all features.',
+    dismiss: 'Dismiss',
 
     // Errors
     errorInvalidData: 'Please enter valid data',
@@ -159,6 +174,7 @@ const translations = {
     errorCount: 'Warnings ({0}):',
     errorDetails: 'Error Details:',
     downloadFile: 'Download File',
+    clearInput: 'Clear URL',
   }
 };
 
@@ -193,6 +209,11 @@ function setLanguage(lang) {
   document.querySelectorAll('[data-i18n-html]').forEach(el => {
     const key = el.getAttribute('data-i18n-html');
     el.innerHTML = t(key);
+  });
+
+  document.querySelectorAll('[data-i18n-aria]').forEach(el => {
+    const key = el.getAttribute('data-i18n-aria');
+    el.setAttribute('aria-label', t(key));
   });
 
   const langBtn = document.getElementById('langToggle');
