@@ -1,8 +1,8 @@
 <p align="left">
-  <img src="static/wb-logo.svg" alt="logo" width="90" />
+  <img src="static/wb-logo.svg" alt="logo" width="80" />
 </p>
-# YouTube Downloader Pro
 
+# YouTube Downloader Pro
 
 <div dir="rtl">
 
